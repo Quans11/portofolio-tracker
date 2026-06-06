@@ -1,12 +1,7 @@
 <!--
   ===========================================================================
-  PORTFOLIO TRACKER  —  satu file (Vercel + Supabase)
-  ---------------------------------------------------------------------------
-  Isi file ini terbagi menjadi 4 bagian, ditandai komentar di bawah:
-    BAGIAN 1 — Struktur HTML (isi halaman: navbar, form, tabel, modal)
-    BAGIAN 2 — CSS          (desain & tata letak, di dalam <style>)
-    BAGIAN 3 — Konfigurasi  (URL & kunci publik Supabase)
-    BAGIAN 4 — JavaScript   (logika login, tambah/edit/hapus, grafik)
+  PORTFOLIO TRACKER — satu file (Vercel + Supabase)
+  BAGIAN 1 = Struktur HTML | BAGIAN 2 = CSS | BAGIAN 3 = Konfigurasi | BAGIAN 4 = JavaScript
   ===========================================================================
 -->
 <!DOCTYPE html>
@@ -16,9 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portfolio Tracker</title>
   <style>
-/* =================================================================
-   BAGIAN 2 — CSS (semua desain & tata letak tampilan)
-   ================================================================= */
+/* ===== BAGIAN 2 — CSS (desain & tata letak) ===== */
 :root{
   --bg:#f1f5f9;--card:#fff;--ink:#0f172a;--muted:#64748b;
   --primary:#2563eb;--primary-d:#1d4ed8;--border:#e2e8f0;
@@ -107,10 +100,18 @@ main.container{padding-top:28px;padding-bottom:60px}
 @media (max-width:820px){.summary{grid-template-columns:repeat(2,1fr)}.grid-form{grid-template-columns:1fr}}
 @media (max-width:480px){.navbar nav{gap:8px}.nav-user{display:none}}
 
+/* tombol & helper fitur harga live */
+.btn-live{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+.btn-live:hover{background:#d1fae5}
+.field-help{font-weight:400;color:var(--muted);font-size:.78rem;margin-left:4px}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap}
+.price-field button{align-self:flex-start;margin:2px 0}
+.card-head{flex-wrap:wrap;gap:10px}
+
 </style>
 </head>
 <body>
-  <!-- ============ BAGIAN 1 — STRUKTUR HTML (isi halaman) ============ -->
+  <!-- ===== BAGIAN 1 — STRUKTUR HTML (isi halaman) ===== -->
   <header class="navbar">
     <div class="container nav-inner">
       <a class="brand" href="#">📈 Portfolio Tracker</a>
@@ -161,7 +162,7 @@ main.container{padding-top:28px;padding-bottom:60px}
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Daftar Aset</h2></div>
+        <div class="card-head"><h2>Daftar Aset</h2><div class="header-actions"><button id="btnRefreshAll" class="btn-outline">🔄 Perbarui harga (live)</button></div></div>
         <div id="emptyState" class="muted empty hidden">Belum ada aset. Klik "Tambah Aset" untuk memulai.</div>
         <div class="table-scroll">
           <table class="table" id="assetTable">
@@ -195,17 +196,17 @@ main.container{padding-top:28px;padding-bottom:60px}
             <option value="lainnya">Lainnya</option>
           </select>
         </label>
-        <label>Kode / Ticker (opsional) <input type="text" name="symbol" placeholder="mis. BBCA, BTC"></label>
+        <label>Kode / Ticker <span class="field-help" id="symHelp">(opsional)</span> <input type="text" name="symbol"></label>
         <label>Mata Uang
           <select name="currency">
             <option value="IDR">IDR</option><option value="USD">USD</option>
             <option value="EUR">EUR</option><option value="SGD">SGD</option>
           </select>
         </label>
-        <label>Jumlah / Unit <input type="number" step="any" min="0" name="quantity" required></label>
+        <label><span id="qtyLabel">Jumlah</span> <span class="field-help" id="qtyHelp"></span> <input type="number" step="any" min="0" name="quantity" required></label>
         <label>Tanggal Beli (opsional) <input type="date" name="purchase_date"></label>
-        <label>Harga Beli / Unit <input type="number" step="any" min="0" name="buy_price" required></label>
-        <label>Harga Sekarang / Unit <input type="number" step="any" min="0" name="current_price" required></label>
+        <label><span id="buyLabel">Harga Beli</span> <input type="number" step="any" min="0" name="buy_price" required></label>
+        <label class="price-field"><span id="curLabel">Harga Sekarang</span> <button type="button" id="btnLivePrice" class="btn-sm btn-live">🔄 Ambil live</button> <input type="number" step="any" min="0" name="current_price" required></label>
         <label class="full">Catatan (opsional) <textarea name="notes" rows="2"></textarea></label>
         <div class="full form-actions">
           <button type="submit" class="btn">Simpan</button>
@@ -220,55 +221,69 @@ main.container{padding-top:28px;padding-bottom:60px}
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script>
-// =================================================================
-// BAGIAN 3 — Konfigurasi Supabase (URL + kunci publik)
-// =================================================================
+// ===== BAGIAN 3 — Konfigurasi Supabase (URL + kunci publik) =====
 // Kredensial publik Supabase (aman di frontend — data dilindungi Row Level Security).
 window.SUPABASE_URL = 'https://cfcjtznaycjiiaxbxzfq.supabase.co';
 window.SUPABASE_ANON_KEY = 'sb_publishable_oblrucBfOfL4-OezP9CZBw_mqRC7cM0';
 
-// =================================================================
-// BAGIAN 4 — Logika Aplikasi: Auth, CRUD, ringkasan, grafik
-// =================================================================
+// ===== BAGIAN 4 — Logika Aplikasi (auth, CRUD, form adaptif, harga live) =====
 // =====================================================================
 //  Portfolio Tracker — logika frontend (Vercel + Supabase)
+//  Fitur: auth, CRUD, form adaptif per jenis aset, harga live
 // =====================================================================
 const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-const TYPE_LABEL = {
-  saham:'Saham', kripto:'Kripto', reksadana:'Reksa Dana',
-  obligasi:'Obligasi', emas:'Emas', lainnya:'Lainnya'
-};
+const TYPE_LABEL = { saham:'Saham', kripto:'Kripto', reksadana:'Reksa Dana', obligasi:'Obligasi', emas:'Emas', lainnya:'Lainnya' };
 const PALETTE = ['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2'];
 
-let currentUser = null;
-let chart = null;
+// Pemetaan simbol kripto populer -> id CoinGecko (selain ini, simbol dipakai apa adanya sbg id)
+const COIN_IDS = {
+  btc:'bitcoin', xbt:'bitcoin', eth:'ethereum', bnb:'binancecoin', sol:'solana',
+  xrp:'ripple', ada:'cardano', doge:'dogecoin', dot:'polkadot', matic:'matic-network',
+  ltc:'litecoin', trx:'tron', avax:'avalanche-2', link:'chainlink', usdt:'tether',
+  usdc:'usd-coin', shib:'shiba-inu', ton:'the-open-network', near:'near', atom:'cosmos',
+  uni:'uniswap', bch:'bitcoin-cash', etc:'ethereum-classic', xlm:'stellar', algo:'algorand'
+};
 
-// ---------- util ----------
-const $ = (sel) => document.querySelector(sel);
+let currentUser = null, chart = null, cache = [];
+
+const $ = (s) => document.querySelector(s);
 const show = (el) => el.classList.remove('hidden');
 const hide = (el) => el.classList.add('hidden');
 
-function money(amount, currency = 'IDR') {
+// ---------- satuan & label per jenis aset ----------
+function lotSize(type){ return type === 'saham' ? 100 : 1; }              // 1 lot = 100 lembar
+function unitName(type){ return ({saham:'lot', kripto:'koin', emas:'gram'})[type] || 'unit'; }
+function qtyLabelText(type){ return 'Jumlah (' + unitName(type) + ')'; }
+function qtyHelpText(type){
+  if (type === 'saham') return '1 lot = 100 lembar';
+  if (type === 'kripto') return 'boleh desimal, mis. 0.005';
+  return '';
+}
+function priceUnit(type){ return ({saham:'lembar', kripto:'koin', emas:'gram'})[type] || 'unit'; }
+function symHelpText(type){
+  if (type === 'saham') return '(mis. BBCA, TLKM, BBRI)';
+  if (type === 'kripto') return '(mis. BTC, ETH, SOL)';
+  return '(opsional)';
+}
+function hasLivePrice(type){ return type === 'saham' || type === 'kripto'; }
+
+function money(amount, currency='IDR'){
   if (currency === 'IDR') return 'Rp ' + Math.round(amount).toLocaleString('id-ID');
   return currency + ' ' + Number(amount).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
-function fmtQty(q) {
-  return parseFloat(Number(q).toFixed(8)).toLocaleString('id-ID', {maximumFractionDigits:8});
+function fmtQty(q){ return parseFloat(Number(q).toFixed(8)).toLocaleString('id-ID', {maximumFractionDigits:8}); }
+function flash(msg, type='success'){
+  const f = $('#flash'); f.textContent = msg; f.className = 'flash flash-' + type; show(f);
+  clearTimeout(window._ft); window._ft = setTimeout(() => hide(f), 5000);
 }
-function flash(msg, type = 'success') {
-  const f = $('#flash');
-  f.textContent = msg;
-  f.className = 'flash flash-' + type;
-  show(f);
-  setTimeout(() => hide(f), 4000);
-}
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ---------- AUTH ----------
-async function refreshAuthUI() {
-  const { data: { session } } = await sb.auth.getSession();
+async function refreshAuthUI(){
+  const { data:{ session } } = await sb.auth.getSession();
   currentUser = session ? session.user : null;
-  if (currentUser) {
+  if (currentUser){
     hide($('#authView')); show($('#appView')); show($('#navAuthed'));
     $('#navUser').textContent = currentUser.email;
     await loadInvestments();
@@ -276,201 +291,227 @@ async function refreshAuthUI() {
     show($('#authView')); hide($('#appView')); hide($('#navAuthed'));
   }
 }
-
-// tab switch
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const isLogin = tab.dataset.tab === 'login';
-    $('#loginForm').classList.toggle('hidden', !isLogin);
-    $('#registerForm').classList.toggle('hidden', isLogin);
-  });
-});
-
+document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  const isLogin = tab.dataset.tab === 'login';
+  $('#loginForm').classList.toggle('hidden', !isLogin);
+  $('#registerForm').classList.toggle('hidden', isLogin);
+}));
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = e.target;
-  const { error } = await sb.auth.signInWithPassword({
-    email: f.email.value, password: f.password.value
-  });
+  const { error } = await sb.auth.signInWithPassword({ email:e.target.email.value, password:e.target.password.value });
   if (error) return flash(error.message, 'error');
   await refreshAuthUI();
 });
-
 $('#registerForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = e.target;
-  const { data, error } = await sb.auth.signUp({
-    email: f.email.value, password: f.password.value
-  });
+  const { data, error } = await sb.auth.signUp({ email:e.target.email.value, password:e.target.password.value });
   if (error) return flash(error.message, 'error');
-  if (data.session) {
-    await refreshAuthUI();       // email confirmation dimatikan → langsung masuk
-  } else {
-    flash('Pendaftaran berhasil. Cek email Anda untuk konfirmasi, lalu masuk.', 'success');
-  }
+  if (data.session) await refreshAuthUI();
+  else flash('Pendaftaran berhasil. Silakan masuk.', 'success');
 });
-
-$('#btnLogout').addEventListener('click', async () => {
-  await sb.auth.signOut();
-  await refreshAuthUI();
-});
+$('#btnLogout').addEventListener('click', async () => { await sb.auth.signOut(); await refreshAuthUI(); });
 
 // ---------- READ + ringkasan ----------
-async function loadInvestments() {
-  const { data, error } = await sb.from('investments')
-    .select('*').order('created_at', { ascending: false });
+async function loadInvestments(){
+  const { data, error } = await sb.from('investments').select('*').order('created_at', { ascending:false });
   if (error) return flash(error.message, 'error');
-  renderTable(data || []);
-  renderSummary(data || []);
+  cache = data || [];
+  renderTable(cache); renderSummary(cache);
 }
-
-function renderSummary(rows) {
-  let invested = 0, value = 0;
-  const alloc = {};
+function renderSummary(rows){
+  let invested = 0, value = 0; const alloc = {};
   rows.forEach(r => {
     const inv = Number(r.quantity) * Number(r.buy_price);
     const val = Number(r.quantity) * Number(r.current_price);
     invested += inv; value += val;
     alloc[r.asset_type] = (alloc[r.asset_type] || 0) + val;
   });
-  const gain = value - invested;
-  const pct = invested > 0 ? (gain / invested) * 100 : 0;
-
+  const gain = value - invested, pct = invested > 0 ? gain/invested*100 : 0;
   $('#sInvested').textContent = money(invested);
   $('#sValue').textContent = money(value);
-  $('#sGain').textContent = (gain >= 0 ? '+' : '') + money(gain);
-  $('#sGainPct').textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-  $('#sGainCard').className = 'stat-card ' + (gain >= 0 ? 'pos' : 'neg');
+  $('#sGain').textContent = (gain>=0?'+':'') + money(gain);
+  $('#sGainPct').textContent = (pct>=0?'+':'') + pct.toFixed(2) + '%';
+  $('#sGainCard').className = 'stat-card ' + (gain>=0?'pos':'neg');
   $('#sCount').textContent = rows.length;
-
   renderChart(alloc);
 }
-
-function renderChart(alloc) {
+function renderChart(alloc){
   const labels = Object.keys(alloc).map(t => TYPE_LABEL[t] || t);
   const data = Object.values(alloc);
   const section = $('#chartSection');
-  if (!data.length || data.every(v => v === 0)) { hide(section); return; }
+  if (!data.length || data.every(v => v === 0)){ hide(section); return; }
   show(section);
-
   if (chart) chart.destroy();
   chart = new Chart($('#allocationChart'), {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'right' },
-        tooltip: { callbacks: { label: (ctx) => {
-          const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
-          const p = total ? (ctx.parsed/total*100).toFixed(1) : 0;
-          return ctx.label + ': ' + money(ctx.parsed) + ' (' + p + '%)';
-        }}}
-      }
-    }
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:PALETTE, borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'right'},
+      tooltip:{ callbacks:{ label:(ctx) => {
+        const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+        const p = total ? (ctx.parsed/total*100).toFixed(1) : 0;
+        return ctx.label + ': ' + money(ctx.parsed) + ' (' + p + '%)';
+      }}}}}
   });
 }
-
-function renderTable(rows) {
-  const body = $('#assetBody');
-  body.innerHTML = '';
+function renderTable(rows){
+  const body = $('#assetBody'); body.innerHTML = '';
   $('#emptyState').classList.toggle('hidden', rows.length > 0);
-
   rows.forEach(r => {
     const cur = r.currency || 'IDR';
     const inv = Number(r.quantity) * Number(r.buy_price);
     const val = Number(r.quantity) * Number(r.current_price);
-    const gain = val - inv;
-    const pct = inv > 0 ? (gain / inv) * 100 : 0;
-    const cls = gain >= 0 ? 'pos' : 'neg';
-
+    const gain = val - inv, pct = inv > 0 ? gain/inv*100 : 0, cls = gain>=0?'pos':'neg';
+    const dispQty = Number(r.quantity) / lotSize(r.asset_type);
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${esc(r.asset_name)}</strong>${r.symbol ? `<span class="ticker">${esc(r.symbol)}</span>` : ''}</td>
-      <td><span class="badge badge-${esc(r.asset_type)}">${TYPE_LABEL[r.asset_type] || esc(r.asset_type)}</span></td>
-      <td class="num">${fmtQty(r.quantity)}</td>
-      <td class="num">${money(r.buy_price, cur)}</td>
-      <td class="num">${money(r.current_price, cur)}</td>
-      <td class="num">${money(inv, cur)}</td>
-      <td class="num">${money(val, cur)}</td>
-      <td class="num ${cls}">${(gain>=0?'+':'')+money(gain,cur)}<br><small>${(pct>=0?'+':'')+pct.toFixed(2)}%</small></td>
-      <td class="actions">
-        <button class="btn-sm" data-edit='${esc(JSON.stringify(r))}'>Edit</button>
-        <button class="btn-sm btn-danger" data-del="${r.id}">Hapus</button>
-      </td>`;
+    tr.innerHTML =
+      '<td><strong>' + esc(r.asset_name) + '</strong>' + (r.symbol ? '<span class="ticker">' + esc(r.symbol) + '</span>' : '') + '</td>' +
+      '<td><span class="badge badge-' + esc(r.asset_type) + '">' + (TYPE_LABEL[r.asset_type] || esc(r.asset_type)) + '</span></td>' +
+      '<td class="num">' + fmtQty(dispQty) + ' <small>' + unitName(r.asset_type) + '</small></td>' +
+      '<td class="num">' + money(r.buy_price, cur) + '</td>' +
+      '<td class="num">' + money(r.current_price, cur) + '</td>' +
+      '<td class="num">' + money(inv, cur) + '</td>' +
+      '<td class="num">' + money(val, cur) + '</td>' +
+      '<td class="num ' + cls + '">' + (gain>=0?'+':'') + money(gain, cur) + '<br><small>' + (pct>=0?'+':'') + pct.toFixed(2) + '%</small></td>' +
+      '<td class="actions">' +
+        (hasLivePrice(r.asset_type) && r.symbol ? '<button class="btn-sm btn-live" data-price="' + r.id + '" title="Perbarui harga live">🔄</button>' : '') +
+        '<button class="btn-sm" data-edit="' + r.id + '">Edit</button>' +
+        '<button class="btn-sm btn-danger" data-del="' + r.id + '">Hapus</button>' +
+      '</td>';
     body.appendChild(tr);
   });
-
-  body.querySelectorAll('[data-edit]').forEach(b =>
-    b.addEventListener('click', () => openModal(JSON.parse(b.dataset.edit))));
-  body.querySelectorAll('[data-del]').forEach(b =>
-    b.addEventListener('click', () => deleteInvestment(b.dataset.del)));
+  body.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openModal(cache.find(x => String(x.id) === b.dataset.edit))));
+  body.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => deleteInvestment(b.dataset.del)));
+  body.querySelectorAll('[data-price]').forEach(b => b.addEventListener('click', () => refreshOne(b)));
 }
 
-function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => (
-  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// ---------- HARGA LIVE ----------
+async function fetchCryptoPrice(symbol, currency){
+  const id = COIN_IDS[symbol.toLowerCase()] || symbol.toLowerCase();
+  const vs = (currency || 'idr').toLowerCase();
+  const url = 'https://api.coingecko.com/api/v3/simple/price?ids=' + encodeURIComponent(id) + '&vs_currencies=' + vs;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('CoinGecko status ' + r.status);
+  const d = await r.json();
+  if (!d[id] || d[id][vs] == null) throw new Error('koin "' + symbol + '" tidak ditemukan');
+  return d[id][vs];
+}
+async function fetchStockPrice(symbol){
+  const { data, error } = await sb.functions.invoke('stock-price', { body:{ symbol, market:'id' } });
+  if (error) throw new Error(error.message || 'fungsi harga gagal');
+  if (data && data.error) throw new Error(data.error);
+  if (!data || data.price == null) throw new Error('harga tidak ditemukan');
+  return data.price;
+}
+async function priceFor(row){
+  if (row.asset_type === 'kripto') return await fetchCryptoPrice(row.symbol, row.currency);
+  if (row.asset_type === 'saham')  return await fetchStockPrice(row.symbol);
+  throw new Error('jenis aset ini tidak mendukung harga live');
+}
+async function refreshOne(btn){
+  const row = cache.find(x => String(x.id) === btn.dataset.price);
+  if (!row) return;
+  const old = btn.textContent; btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const price = await priceFor(row);
+    const { error } = await sb.from('investments').update({ current_price: price }).eq('id', row.id);
+    if (error) throw new Error(error.message);
+    flash(row.asset_name + ': harga diperbarui → ' + money(price, row.currency));
+    await loadInvestments();
+  } catch(e){ flash('Gagal: ' + (e.message || e), 'error'); btn.textContent = old; btn.disabled = false; }
+}
+$('#btnRefreshAll').addEventListener('click', async () => {
+  const targets = cache.filter(r => hasLivePrice(r.asset_type) && r.symbol);
+  if (!targets.length) return flash('Belum ada aset saham/kripto dengan kode untuk diperbarui.', 'error');
+  const btn = $('#btnRefreshAll'); const old = btn.textContent;
+  btn.textContent = '⏳ Memperbarui...'; btn.disabled = true;
+  let ok = 0; const fails = [];
+  for (const r of targets){
+    try { const p = await priceFor(r); await sb.from('investments').update({ current_price:p }).eq('id', r.id); ok++; }
+    catch(e){ fails.push(r.symbol + ' (' + (e.message||e) + ')'); }
+  }
+  btn.textContent = old; btn.disabled = false;
+  await loadInvestments();
+  flash(ok + ' aset diperbarui' + (fails.length ? '. Gagal: ' + fails.join(', ') : '.'), fails.length ? 'error' : 'success');
+});
 
-// ---------- CREATE / UPDATE (modal) ----------
-function openModal(row = null) {
-  const f = $('#assetForm');
-  f.reset();
+// ---------- FORM adaptif (CREATE/UPDATE) ----------
+function updateFormLabels(){
+  const f = $('#assetForm'); const t = f.asset_type.value;
+  $('#qtyLabel').textContent = qtyLabelText(t);
+  $('#qtyHelp').textContent = qtyHelpText(t);
+  $('#buyLabel').textContent = 'Harga Beli / ' + priceUnit(t);
+  $('#curLabel').textContent = 'Harga Sekarang / ' + priceUnit(t);
+  $('#symHelp').textContent = symHelpText(t);
+  $('#btnLivePrice').style.display = hasLivePrice(t) ? '' : 'none';
+}
+function openModal(row=null){
+  const f = $('#assetForm'); f.reset();
   $('#modalTitle').textContent = row ? 'Edit Aset' : 'Tambah Aset';
   f.id.value = row ? row.id : '';
-  if (row) {
+  if (row){
     f.asset_name.value = row.asset_name;
     f.asset_type.value = row.asset_type;
     f.symbol.value = row.symbol || '';
     f.currency.value = row.currency || 'IDR';
-    f.quantity.value = row.quantity;
+    f.quantity.value = Number(row.quantity) / lotSize(row.asset_type);
     f.purchase_date.value = row.purchase_date || '';
     f.buy_price.value = row.buy_price;
     f.current_price.value = row.current_price;
     f.notes.value = row.notes || '';
   }
+  updateFormLabels();
   show($('#modal'));
 }
 function closeModal(){ hide($('#modal')); }
-
 $('#btnAdd').addEventListener('click', () => openModal());
 $('#modalCancel').addEventListener('click', closeModal);
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+$('#assetForm').asset_type.addEventListener('change', updateFormLabels);
+
+// Tombol "Ambil live" di dalam form
+$('#btnLivePrice').addEventListener('click', async () => {
+  const f = $('#assetForm'); const sym = f.symbol.value.trim(); const t = f.asset_type.value;
+  if (!sym) return flash('Isi kode/ticker dulu (mis. BBCA atau BTC).', 'error');
+  const btn = $('#btnLivePrice'); const old = btn.textContent; btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const price = t === 'kripto' ? await fetchCryptoPrice(sym, f.currency.value) : await fetchStockPrice(sym);
+    f.current_price.value = price;
+    flash('Harga live: ' + money(price, f.currency.value));
+  } catch(e){ flash('Gagal ambil harga: ' + (e.message || e), 'error'); }
+  finally { btn.textContent = old; btn.disabled = false; }
+});
 
 $('#assetForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = e.target;
+  const f = e.target; const t = f.asset_type.value; const lot = lotSize(t);
   const payload = {
     user_id: currentUser.id,
     asset_name: f.asset_name.value.trim(),
-    asset_type: f.asset_type.value,
+    asset_type: t,
     symbol: f.symbol.value.trim() || null,
     currency: f.currency.value,
-    quantity: parseFloat(f.quantity.value),
+    quantity: parseFloat(f.quantity.value) * lot,   // simpan dalam satuan dasar (lembar/koin/gram)
     buy_price: parseFloat(f.buy_price.value),
     current_price: parseFloat(f.current_price.value),
     purchase_date: f.purchase_date.value || null,
     notes: f.notes.value.trim() || null,
   };
   let error;
-  if (f.id.value) {
-    ({ error } = await sb.from('investments').update(payload).eq('id', f.id.value));
-  } else {
-    ({ error } = await sb.from('investments').insert(payload));
-  }
+  if (f.id.value) ({ error } = await sb.from('investments').update(payload).eq('id', f.id.value));
+  else ({ error } = await sb.from('investments').insert(payload));
   if (error) return flash(error.message, 'error');
-  closeModal();
-  flash(f.id.value ? 'Aset diperbarui.' : 'Aset ditambahkan.');
+  closeModal(); flash(f.id.value ? 'Aset diperbarui.' : 'Aset ditambahkan.');
   await loadInvestments();
 });
 
 // ---------- DELETE ----------
-async function deleteInvestment(id) {
+async function deleteInvestment(id){
   if (!confirm('Hapus aset ini?')) return;
   const { error } = await sb.from('investments').delete().eq('id', id);
   if (error) return flash(error.message, 'error');
-  flash('Aset dihapus.');
-  await loadInvestments();
+  flash('Aset dihapus.'); await loadInvestments();
 }
 
 // ---------- init ----------
