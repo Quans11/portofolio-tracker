@@ -264,9 +264,10 @@ function priceUnit(type){ return ({saham:'lembar', kripto:'koin', emas:'gram'})[
 function symHelpText(type){
   if (type === 'saham') return '(mis. BBCA, TLKM, BBRI)';
   if (type === 'kripto') return '(mis. BTC, ETH, SOL)';
+  if (type === 'emas') return '(otomatis: harga emas dunia)';
   return '(opsional)';
 }
-function hasLivePrice(type){ return type === 'saham' || type === 'kripto'; }
+function hasLivePrice(type){ return type === 'saham' || type === 'kripto' || type === 'emas'; }
 
 function money(amount, currency='IDR'){
   if (currency === 'IDR') return 'Rp ' + Math.round(amount).toLocaleString('id-ID');
@@ -375,7 +376,7 @@ function renderTable(rows){
       '<td class="num">' + money(val, cur) + '</td>' +
       '<td class="num ' + cls + '">' + (gain>=0?'+':'') + money(gain, cur) + '<br><small>' + (pct>=0?'+':'') + pct.toFixed(2) + '%</small></td>' +
       '<td class="actions">' +
-        (hasLivePrice(r.asset_type) && r.symbol ? '<button class="btn-sm btn-live" data-price="' + r.id + '" title="Perbarui harga live">🔄</button>' : '') +
+        (hasLivePrice(r.asset_type) && (r.symbol || r.asset_type === 'emas') ? '<button class="btn-sm btn-live" data-price="' + r.id + '" title="Perbarui harga live">🔄</button>' : '') +
         '<button class="btn-sm" data-edit="' + r.id + '">Edit</button>' +
         '<button class="btn-sm btn-danger" data-del="' + r.id + '">Hapus</button>' +
       '</td>';
@@ -404,9 +405,17 @@ async function fetchStockPrice(symbol){
   if (!data || data.price == null) throw new Error('harga tidak ditemukan');
   return data.price;
 }
+async function fetchGoldPrice(currency){
+  const { data, error } = await sb.functions.invoke('stock-price', { body:{ symbol:'XAU', vs:(currency || 'IDR') } });
+  if (error) throw new Error(error.message || 'fungsi harga gagal');
+  if (data && data.error) throw new Error(data.error);
+  if (!data || data.price == null) throw new Error('harga emas tidak ditemukan');
+  return data.price;
+}
 async function priceFor(row){
   if (row.asset_type === 'kripto') return await fetchCryptoPrice(row.symbol, row.currency);
   if (row.asset_type === 'saham')  return await fetchStockPrice(row.symbol);
+  if (row.asset_type === 'emas')   return await fetchGoldPrice(row.currency);
   throw new Error('jenis aset ini tidak mendukung harga live');
 }
 async function refreshOne(btn){
@@ -422,7 +431,7 @@ async function refreshOne(btn){
   } catch(e){ flash('Gagal: ' + (e.message || e), 'error'); btn.textContent = old; btn.disabled = false; }
 }
 $('#btnRefreshAll').addEventListener('click', async () => {
-  const targets = cache.filter(r => hasLivePrice(r.asset_type) && r.symbol);
+  const targets = cache.filter(r => hasLivePrice(r.asset_type) && (r.symbol || r.asset_type === 'emas'));
   if (!targets.length) return flash('Belum ada aset saham/kripto dengan kode untuk diperbarui.', 'error');
   const btn = $('#btnRefreshAll'); const old = btn.textContent;
   btn.textContent = '⏳ Memperbarui...'; btn.disabled = true;
@@ -473,10 +482,13 @@ $('#assetForm').asset_type.addEventListener('change', updateFormLabels);
 // Tombol "Ambil live" di dalam form
 $('#btnLivePrice').addEventListener('click', async () => {
   const f = $('#assetForm'); const sym = f.symbol.value.trim(); const t = f.asset_type.value;
-  if (!sym) return flash('Isi kode/ticker dulu (mis. BBCA atau BTC).', 'error');
+  if (t !== 'emas' && !sym) return flash('Isi kode/ticker dulu (mis. BBCA atau BTC).', 'error');
   const btn = $('#btnLivePrice'); const old = btn.textContent; btn.textContent = '⏳'; btn.disabled = true;
   try {
-    const price = t === 'kripto' ? await fetchCryptoPrice(sym, f.currency.value) : await fetchStockPrice(sym);
+    let price;
+    if (t === 'kripto') price = await fetchCryptoPrice(sym, f.currency.value);
+    else if (t === 'saham') price = await fetchStockPrice(sym);
+    else if (t === 'emas') price = await fetchGoldPrice(f.currency.value);
     f.current_price.value = price;
     flash('Harga live: ' + money(price, f.currency.value));
   } catch(e){ flash('Gagal ambil harga: ' + (e.message || e), 'error'); }
