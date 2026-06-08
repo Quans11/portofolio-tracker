@@ -108,6 +108,7 @@ main.container{padding-top:28px;padding-bottom:60px}
 .price-field button{align-self:flex-start;margin:2px 0}
 .card-head{flex-wrap:wrap;gap:10px}
 
+.fx-note{background:#EFF6FF;border:1px solid #DBEAFE;color:#1E3A8A;border-radius:10px;padding:9px 13px;font-size:.82rem;margin:-6px 0 18px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -155,6 +156,7 @@ main.container{padding-top:28px;padding-bottom:60px}
         <div id="sGainCard" class="stat-card"><span class="stat-label">Untung / Rugi</span><span id="sGain" class="stat-value">Rp 0</span><span id="sGainPct" class="stat-sub">0%</span></div>
         <div class="stat-card"><span class="stat-label">Jumlah Aset</span><span id="sCount" class="stat-value">0</span></div>
       </section>
+      <p id="fxNote" class="fx-note hidden"></p>
 
       <section id="chartSection" class="card hidden">
         <h2>Alokasi Portofolio (nilai sekarang)</h2>
@@ -319,23 +321,60 @@ async function loadInvestments(){
   const { data, error } = await sb.from('investments').select('*').order('created_at', { ascending:false });
   if (error) return flash(error.message, 'error');
   cache = data || [];
-  renderTable(cache); renderSummary(cache);
+  renderTable(cache);
+  await ensureRates(cache);
+  renderSummary(cache);
+}
+
+// ---------- Konversi mata uang ke IDR (kurs live) ----------
+const BASE = 'IDR';
+let fxRates = { IDR: 1 };                 // berapa IDR untuk 1 unit mata uang
+async function fetchFxRate(cur){
+  const { data, error } = await sb.functions.invoke('stock-price', { body:{ fx: cur } });
+  if (error) throw new Error(error.message || 'kurs gagal');
+  if (!data || data.rate == null) throw new Error('kurs tidak ditemukan');
+  return data.rate;
+}
+async function ensureRates(rows){
+  const curs = [...new Set(rows.map(r => r.currency || 'IDR'))].filter(c => c !== 'IDR' && fxRates[c] == null);
+  await Promise.all(curs.map(async c => {
+    try { fxRates[c] = await fetchFxRate(c); }
+    catch(e){ fxRates[c] = null; }        // null = gagal dikonversi
+  }));
+}
+function toIDR(amount, cur){
+  cur = cur || 'IDR';
+  const r = fxRates[cur];
+  return (r == null) ? null : amount * r;
 }
 function renderSummary(rows){
-  let invested = 0, value = 0; const alloc = {};
+  let invested = 0, value = 0, missing = false; const alloc = {};
   rows.forEach(r => {
-    const inv = Number(r.quantity) * Number(r.buy_price);
-    const val = Number(r.quantity) * Number(r.current_price);
+    const inv = toIDR(Number(r.quantity) * Number(r.buy_price), r.currency);
+    const val = toIDR(Number(r.quantity) * Number(r.current_price), r.currency);
+    if (inv === null || val === null){ missing = true; return; }   // mata uang gagal dikonversi
     invested += inv; value += val;
     alloc[r.asset_type] = (alloc[r.asset_type] || 0) + val;
   });
   const gain = value - invested, pct = invested > 0 ? gain/invested*100 : 0;
-  $('#sInvested').textContent = money(invested);
-  $('#sValue').textContent = money(value);
-  $('#sGain').textContent = (gain>=0?'+':'') + money(gain);
+  // Semua kartu ringkasan ditampilkan dalam IDR (sudah dikonversi)
+  $('#sInvested').textContent = money(invested, BASE);
+  $('#sValue').textContent = money(value, BASE);
+  $('#sGain').textContent = (gain>=0?'+':'') + money(gain, BASE);
   $('#sGainPct').textContent = (pct>=0?'+':'') + pct.toFixed(2) + '%';
   $('#sGainCard').className = 'stat-card ' + (gain>=0?'pos':'neg');
   $('#sCount').textContent = rows.length;
+  // Catatan konversi mata uang
+  const others = [...new Set(rows.map(r => r.currency || 'IDR'))].filter(c => c !== 'IDR');
+  const note = $('#fxNote');
+  if (note){
+    if (others.length){
+      let txt = 'Total & grafik dikonversi ke IDR (kurs live) — ' +
+        others.map(c => '1 ' + c + ' = ' + (fxRates[c] != null ? money(fxRates[c], 'IDR') : 'kurs gagal')).join(', ') + '.';
+      if (missing) txt += ' Sebagian aset gagal dikonversi & belum dihitung.';
+      note.textContent = txt; note.classList.remove('hidden');
+    } else { note.classList.add('hidden'); }
+  }
   renderChart(alloc);
 }
 function renderChart(alloc){
